@@ -1,4 +1,4 @@
-# Semi Streaming Maximum Matching - COS IW 07
+# Semi Streaming Maximum Matching - Spring 2023 COS IW 07 Project
 
 Implementations of approximate maximum cardinality matching algorithms in the semi-streaming model.
 
