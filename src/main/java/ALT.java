@@ -148,6 +148,7 @@ public class ALT {
                 if (previousOwner != -1) {
                     bidderAllocations.put(previousOwner, -1);
                 }
+                itemOwners.put(item, bidder);
                 bidderAllocations.put(bidder, item);
                 prices.put(item, Math.min(price + eps, 1.0));
             }

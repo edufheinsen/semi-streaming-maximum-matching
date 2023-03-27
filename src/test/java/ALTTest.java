@@ -97,14 +97,11 @@ class ALTTest {
         ALT alt = new ALT(stream);
         double eps = 0.25;
         Set<DefaultEdge> matching = alt.findApproximateMaxMatching(eps);
-        System.out.println("The returned matching is " + matching);
         Set<Integer> verticesCoveredByReturnedMatching = new HashSet<>();
         Set<Integer> originalVertexSet = gnmBipartiteGraph.vertexSet();
         for (DefaultEdge edge : matching) {
             int s = gnmBipartiteGraph.getEdgeSource(edge);
-            System.out.println("source " + s);
             int t = gnmBipartiteGraph.getEdgeTarget(edge);
-            System.out.println("target " +  t);
             assertAll(() -> assertTrue(originalVertexSet.contains(s)),
                     () -> assertTrue(originalVertexSet.contains(t)),
                     () -> assertTrue(gnmBipartiteGraph.containsEdge(s, t)),
