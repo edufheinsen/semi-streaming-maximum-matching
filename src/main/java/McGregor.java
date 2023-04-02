@@ -20,7 +20,8 @@ public class McGregor {
         if (eps <= 0 || eps >= 1) {
             throw new IllegalArgumentException("Argument to findApproximateMatching must be a real number strictly between 0 and 1");
         }
-        Set<DefaultEdge> M = findMaximalMatching(this.stream);
+        Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
+        Set<DefaultEdge> M = findMaximalMatching(this.stream, g);
         this.k = (int) Math.ceil(1.0/eps + 1);
         this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) );
 
@@ -49,9 +50,20 @@ public class McGregor {
         return longestAugmentingPath;
     }
 
-    private Set<DefaultEdge> findMaximalMatching(List<DefaultEdge> stream) {
-        // TODO: Implement!
-        return new HashSet<>();
+    private Set<DefaultEdge> findMaximalMatching(List<DefaultEdge> stream, Graph<Integer, DefaultEdge> g) {
+        Set<DefaultEdge> matching = new HashSet<>();
+        Set<Integer> verticesCoveredByMatching = new HashSet<>();
+
+        for (DefaultEdge edge : stream) {
+            int s = g.getEdgeSource(edge);
+            int t = g.getEdgeTarget(edge);
+            if (!verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t)) {
+                matching.add(edge);
+                verticesCoveredByMatching.add(s);
+                verticesCoveredByMatching.add(t);
+            }
+        }
+        return matching;
     }
 
     private Set<DefaultEdge> findAugPaths(List<DefaultEdge> stream, Set<DefaultEdge> M, int i) {
@@ -64,7 +76,7 @@ public class McGregor {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         List<Set<Integer>> L = new ArrayList<>();
         List<Set<DefaultEdge>> E = new ArrayList<>();
-        // TODO: I  Implement!
+        // TODO: Implement!
         return Triplet.with(g, L, E);
     }
 
