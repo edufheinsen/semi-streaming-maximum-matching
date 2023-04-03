@@ -86,7 +86,7 @@ public class McGregor {
 
 
         for (int v : freeVertices) {
-            int randLayer = new Random().nextBoolean() ? 0 : (i+1);
+            int randLayer = ThreadLocalRandom.current().nextBoolean() ? 0 : (i+1);
             vertexL.put(v, Pair.with(randLayer, ""));
             if (!vertexLInv.containsKey(randLayer)) {
                 vertexLInv.put(randLayer, new HashSet<>());
