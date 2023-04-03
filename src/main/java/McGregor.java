@@ -1,3 +1,4 @@
+import org.javatuples.Pair;
 import org.javatuples.Triplet;
 import org.jgrapht.Graph;
 import org.jgrapht.Graphs;
@@ -6,6 +7,7 @@ import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class McGregor {
     private final List<DefaultEdge> stream;
@@ -74,11 +76,95 @@ public class McGregor {
 
     private Triplet<Graph<Integer, DefaultEdge>, List<Set<Integer>>, List<Set<DefaultEdge>>> createLayerGraph(List<DefaultEdge> stream, Set<DefaultEdge> M, int i) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
-        List<Set<Integer>> L = new ArrayList<>();
-        List<Set<DefaultEdge>> E = new ArrayList<>();
+
+        Set<Integer> freeVertices = getFreeVertices(stream, M);
+
+        Map<Integer, Pair<Integer, String>> vertexL = new HashMap<>();
+        Map<Integer, Set<Integer>> vertexLInv = new HashMap<>();
+        Map<DefaultEdge, Pair<Integer, String>> edgeL = new HashMap<>();
+        Map<Integer, Set<DefaultEdge>> edgeLInv = new HashMap<>();
+
+
+        for (int v : freeVertices) {
+            int randLayer = new Random().nextBoolean() ? 0 : (i+1);
+            vertexL.put(v, Pair.with(randLayer, ""));
+            if (!vertexLInv.containsKey(randLayer)) {
+                vertexLInv.put(randLayer, new HashSet<>());
+            }
+            Set<Integer> vertexSet = vertexLInv.get(randLayer);
+            vertexSet.add(v);
+        }
+
+        for (DefaultEdge edge : M) {
+            int u = g.getEdgeSource(edge);
+            int v = g.getEdgeTarget(edge);
+            int j = ThreadLocalRandom.current().nextInt(1, i + 1);
+            edgeL.put(edge, Pair.with(j, ""));
+            if (!edgeLInv.containsKey(j)) {
+                edgeLInv.put(j, new HashSet<>());
+            }
+            Set<DefaultEdge> edgeSet = edgeLInv.get(j);
+            edgeSet.add(edge);
+
+            vertexL.put(u, Pair.with(j, "a"));
+            vertexL.put(v, Pair.with(j, "b"));
+
+            if (!vertexLInv.containsKey(j)) {
+                vertexLInv.put(j, new HashSet<>());
+            }
+            Set<Integer> vertexSet = vertexLInv.get(j);
+            vertexSet.add(u);
+            vertexSet.add(v);
+
+        }
+
+        Map<Integer, Set<DefaultEdge>> E = new HashMap<>();
+        Map<Integer, Set<Integer>> L = new HashMap<>();
+
+        E.put(i, new HashSet<>());
+        E.put(0, new HashSet<>());
+
+        for (DefaultEdge edge : stream) {
+            int u = g.getEdgeSource(edge);
+            int v = g.getEdgeTarget(edge);
+            Pair<Integer, String> uLayer = vertexL.get(u);
+            Pair<Integer, String> vLayer = vertexL.get(v);
+            if (uLayer.getValue0() == (i+1) && (vLayer.getValue0() == i && vLayer.getValue1().equals("a"))) {
+                E.get(i).add(edge);
+            }
+            if ((uLayer.getValue0() == 1 && uLayer.getValue1() == "b") && vLayer.getValue0() == 0) {
+                E.get(0).add(edge);
+            }
+        }
+
+        // for j = 0 to i + 1
+        //5. do Lj ← l−1(j)
+        for (int j = 0; j <= i + 1; j++) {
+            L.put()
+        }
+
+        for (int j = 1; j <= i - 1; j++) {
+            Set<DefaultEdge> edgeSetJ = new HashSet<>();
+            for (DefaultEdge edge : stream) {
+                int u = g.getEdgeSource(edge);
+                int v = g.getEdgeTarget(edge);
+                if (vertexL.get(u).getValue0() == (j+1) && vertexL.get(u).getValue1().equals("b")
+                        && vertexL.get(v).getValue0() == j && vertexL.get(v).getValue1().equals("a")) {
+                    edgeSetJ.add(edge);
+                }
+            }
+            E.put(j, edgeSetJ);
+        }
+
         // TODO: Implement!
         return Triplet.with(g, L, E);
     }
+
+    private Set<Integer> getFreeVertices(List<DefaultEdge> stream, Set<DefaultEdge> M) {
+        return new HashSet<>();
+    }
+
+
 
     private Set<DefaultEdge> findLayerPaths(Graph<Integer, DefaultEdge> GPrime, Set<Integer> S, double delta, int j) {
         // TODO: Implement!
