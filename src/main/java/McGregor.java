@@ -1,8 +1,6 @@
 import org.javatuples.Pair;
-import org.javatuples.Triplet;
+import org.javatuples.Quartet;
 import org.jgrapht.Graph;
-import org.jgrapht.Graphs;
-import org.jgrapht.alg.color.GreedyColoring;
 import org.jgrapht.graph.DefaultEdge;
 import org.jgrapht.graph.DefaultUndirectedGraph;
 
@@ -28,28 +26,28 @@ public class McGregor {
         this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) );
 
         for (int j = 1; j <= r; j++) {
-            List<Set<DefaultEdge>> augmentingPaths = new ArrayList<>(); // TODO: make more efficient! can just keep maximum
+            List<Set<DefaultEdge>> matchings = new ArrayList<>(); // TODO: make more efficient! can just keep maximum
             for (int i = 1; i <= k; i++) {
-                Set<DefaultEdge> augmentingPath = findAugPaths(this.stream, M, i);
-                augmentingPaths.add(augmentingPath);
+                Set<DefaultEdge> matching = findAugPaths(M, i);
+                matchings.add(matching);
             }
-            M = maxCardinalityAugmentingPath(augmentingPaths);
+            M = maxCardinalityMatching(matchings);
         }
 
         return M;
     }
 
-    private Set<DefaultEdge> maxCardinalityAugmentingPath(List<Set<DefaultEdge>> augmentingPaths) {
+    private Set<DefaultEdge> maxCardinalityMatching(List<Set<DefaultEdge>> matchings) {
         int maxCard = -1;
-        Set<DefaultEdge> longestAugmentingPath = new HashSet<>();
-        for (Set<DefaultEdge> augmentingPath : augmentingPaths) {
-            int cardinality = augmentingPath.size();
+        Set<DefaultEdge> largestMatching = new HashSet<>();
+        for (Set<DefaultEdge> matching : matchings) {
+            int cardinality = matching.size();
             if (cardinality > maxCard) {
                 maxCard = cardinality;
-                longestAugmentingPath = augmentingPath;
+                largestMatching = matching;
             }
         }
-        return longestAugmentingPath;
+        return largestMatching;
     }
 
     private Set<DefaultEdge> findMaximalMatching(List<DefaultEdge> stream, Graph<Integer, DefaultEdge> g) {
@@ -68,110 +66,221 @@ public class McGregor {
         return matching;
     }
 
-    private Set<DefaultEdge> findAugPaths(List<DefaultEdge> stream, Set<DefaultEdge> M, int i) {
-        Triplet<Graph<Integer, DefaultEdge>, List<Set<Integer>>, List<Set<DefaultEdge>>> GPrime = createLayerGraph(stream, M, i);
-        Set<DefaultEdge> P = findLayerPaths(GPrime.getValue0(), GPrime.getValue1().get(i+1), 1.0 / (r * (2*k + 2)), i+1);
-        return setDifference(M, P);
+    private Set<DefaultEdge> findAugPaths(Set<DefaultEdge> M, int i) {
+        Quartet<Map<Integer, Pair<Integer, String>>, Set<Integer>, Map<Integer, Integer>, Map<Integer, Integer>> quartet
+                = createLayerGraph(M, i);
+        Map<Integer, Pair<Integer, String>> L = quartet.getValue0();
+        Set<Integer> firstLayer = quartet.getValue1();
+        Map<Integer, Integer> matching = quartet.getValue2();
+        Map<Integer, Integer> layerSizes = quartet.getValue3();
+        Map<Integer, Integer> tags = new HashMap<>();
+        for (int j = 0; j <= i + 1; j++) {
+            if (layerSizes.get(j) == 0) {
+                return M;
+            }
+        }
+        findLayerPaths(L, firstLayer, 1.0 / (r * (2*k + 2)), i+1, tags, matching, layerSizes);
+        Set<DefaultEdge> P = getPathsFromTags(tags, firstLayer);
+        return getSymmetricDifference(M, P);
     }
 
-    private Triplet<Graph<Integer, DefaultEdge>, List<Set<Integer>>, List<Set<DefaultEdge>>> createLayerGraph(List<DefaultEdge> stream, Set<DefaultEdge> M, int i) {
+    // just returns map from vertices to their layer (each layer is a Pair<Integer, String>)
+    private Quartet<Map<Integer, Pair<Integer, String>>, Set<Integer>, Map<Integer, Integer>,
+            Map<Integer, Integer>> createLayerGraph(Set<DefaultEdge> M, int i) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
 
-        Set<Integer> freeVertices = getFreeVertices(stream, M);
+        Set<Integer> freeVertices = getFreeVertices(M);
 
         Map<Integer, Pair<Integer, String>> vertexL = new HashMap<>();
-        Map<Integer, Set<Integer>> vertexLInv = new HashMap<>();
-        Map<DefaultEdge, Pair<Integer, String>> edgeL = new HashMap<>();
-        Map<Integer, Set<DefaultEdge>> edgeLInv = new HashMap<>();
 
+        Map<Integer, Integer> matching = new HashMap<>();
 
+        Map<Integer, Integer> layerSizes = new HashMap<>();
+
+        for (int j = 0; j <= i + 1; j++) {
+            layerSizes.put(j, 0);
+        }
+
+        Set<Integer> firstLayer = new HashSet<>();
         for (int v : freeVertices) {
             int randLayer = ThreadLocalRandom.current().nextBoolean() ? 0 : (i+1);
-            vertexL.put(v, Pair.with(randLayer, ""));
-            if (!vertexLInv.containsKey(randLayer)) {
-                vertexLInv.put(randLayer, new HashSet<>());
+            vertexL.put(v, Pair.with(randLayer, "a")); // Suspicious - be careful if this nonempty tagging breaks something
+            layerSizes.put(randLayer, layerSizes.getOrDefault(i+1,0) + 1);
+            if (randLayer == (i+1)) {
+                firstLayer.add(v);
             }
-            Set<Integer> vertexSet = vertexLInv.get(randLayer);
-            vertexSet.add(v);
         }
 
         for (DefaultEdge edge : M) {
             int u = g.getEdgeSource(edge);
             int v = g.getEdgeTarget(edge);
             int j = ThreadLocalRandom.current().nextInt(1, i + 1);
-            edgeL.put(edge, Pair.with(j, ""));
-            if (!edgeLInv.containsKey(j)) {
-                edgeLInv.put(j, new HashSet<>());
-            }
-            Set<DefaultEdge> edgeSet = edgeLInv.get(j);
-            edgeSet.add(edge);
-
+            layerSizes.put(j, layerSizes.getOrDefault(j, 0) + 1);
             vertexL.put(u, Pair.with(j, "a"));
             vertexL.put(v, Pair.with(j, "b"));
-
-            if (!vertexLInv.containsKey(j)) {
-                vertexLInv.put(j, new HashSet<>());
-            }
-            Set<Integer> vertexSet = vertexLInv.get(j);
-            vertexSet.add(u);
-            vertexSet.add(v);
-
+            matching.put(u, v);
+            matching.put(v, u);
         }
 
-        Map<Integer, Set<DefaultEdge>> E = new HashMap<>();
-        Map<Integer, Set<Integer>> L = new HashMap<>();
+        return Quartet.with(vertexL, firstLayer, matching, layerSizes);
+    }
 
-        E.put(i, new HashSet<>());
-        E.put(0, new HashSet<>());
+    private Set<DefaultEdge> getPathsFromTags(Map<Integer, Integer> tags, Set<Integer> firstLayer) {
+        Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
+        Set<Set<Integer>> edgeSet = new HashSet<>(); // TODO: Does this overuse space?? storing all of P????
+        Set<DefaultEdge> P = new HashSet<>();
+        if (tags == null || tags.size() == 0) {
+            return P;
+        }
+        for (int v : firstLayer) {
+            if (tags.get(v) == -1) {
+                continue;
+            }
+            while (tags.get(v) != v) {
+                int u = tags.get(v);
+                // TODO: implement! Need to find a way to get *the edge object* (u, v) from the stream efficiently
+                Set<Integer> newEdge = new HashSet<>();
+                newEdge.add(v);
+                newEdge.add(u);
+                edgeSet.add(newEdge);
+                v = u;
+            }
+        }
+        for (DefaultEdge edge : stream) {
+            int v = g.getEdgeSource(edge);
+            int u = g.getEdgeTarget(edge);
+            Set<Integer> newEdge = new HashSet<>();
+            newEdge.add(v);
+            newEdge.add(u);
+            if (edgeSet.contains(newEdge)) {
+                P.add(edge);
+            }
+        }
+        return P;
+    }
+
+    private Set<Integer> getFreeVertices(Set<DefaultEdge> M) {
+        Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
+        Set<Integer> verticesCoveredByMatching = new HashSet<>();
+        Set<Integer> freeVertices = new HashSet<>();
+        for (DefaultEdge edge : M) {
+            int s = g.getEdgeSource(edge);
+            int t = g.getEdgeTarget(edge);
+            assert !verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t);
+            verticesCoveredByMatching.add(s);
+            verticesCoveredByMatching.add(t);
+        }
+        for (DefaultEdge edge : stream) {
+            int s = g.getEdgeSource(edge);
+            int t = g.getEdgeTarget(edge);
+            if (!verticesCoveredByMatching.contains(s)) {
+                freeVertices.add(s);
+            }
+            if (!verticesCoveredByMatching.contains(t)) {
+                freeVertices.add(t);
+            }
+        }
+        return freeVertices;
+    }
+
+
+
+    private void findLayerPaths(Map<Integer, Pair<Integer, String>> L, Set<Integer> S,
+                                double delta, int j, Map<Integer, Integer> tags, Map<Integer, Integer> matching,
+                                Map<Integer, Integer> layerSizes) {
+        System.out.println("Calling findLayerPaths");
+        // TODO: Fix being careful with a's and b's in each layer - currently are not using the b's
+        Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
+        Set<Integer> SPrime = new HashSet<>(); // TODO: SPrime should almost certainly be the corresponding b vertices in each layer
+        Map<Integer, Integer> Gamma = new HashMap<>();
+
+        Set<Integer> verticesCoveredByMatching = new HashSet<>();
 
         for (DefaultEdge edge : stream) {
-            int u = g.getEdgeSource(edge);
-            int v = g.getEdgeTarget(edge);
-            Pair<Integer, String> uLayer = vertexL.get(u);
-            Pair<Integer, String> vLayer = vertexL.get(v);
-            if (uLayer.getValue0() == (i+1) && (vLayer.getValue0() == i && vLayer.getValue1().equals("a"))) {
-                E.get(i).add(edge);
-            }
-            if ((uLayer.getValue0() == 1 && uLayer.getValue1() == "b") && vLayer.getValue0() == 0) {
-                E.get(0).add(edge);
-            }
-        }
+            int s = g.getEdgeSource(edge);
+            int t = g.getEdgeTarget(edge);
+            Pair<Integer, String> sLayer = L.get(s);
+            Pair<Integer, String> tLayer = L.get(t);
 
-        // for j = 0 to i + 1
-        //5. do Lj ← l−1(j)
-        for (int j = 0; j <= i + 1; j++) {
-            L.put()
-        }
+            // TODO: be careful with the tagging - paper assumes u take edge-corresponding nodes in the layered graphs,
+            // TODO: but only working with original nodes here, maybe make sure to tag one iff its match is tagged, or
+            // TODO: tag the next one when tagging the "a" one
 
-        for (int j = 1; j <= i - 1; j++) {
-            Set<DefaultEdge> edgeSetJ = new HashSet<>();
-            for (DefaultEdge edge : stream) {
-                int u = g.getEdgeSource(edge);
-                int v = g.getEdgeTarget(edge);
-                if (vertexL.get(u).getValue0() == (j+1) && vertexL.get(u).getValue1().equals("b")
-                        && vertexL.get(v).getValue0() == j && vertexL.get(v).getValue1().equals("a")) {
-                    edgeSetJ.add(edge);
+
+            // TODO: be careful with this "a" stuff - the first and last layers don't have tags (maybe tag the last layer with "a"??)
+            if ((S.contains(s) && tLayer.equals(Pair.with(j - 1, "a")) && !tags.containsKey(t)) ||
+                    (S.contains(t) && sLayer.equals(Pair.with(j - 1, "a")) && !tags.containsKey(s))) {
+                if (!verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t)) {
+                    Gamma.put(s, t);
+                    Gamma.put(t, s);
+                    verticesCoveredByMatching.add(s);
+                    verticesCoveredByMatching.add(t);
+                }
+                if (L.get(s).getValue0() == (j - 1)) {
+                    SPrime.add(matching.get(s));
+                } else {
+                    assert L.get(t).getValue0() == (j -1);
+                    SPrime.add(matching.get(t));
                 }
             }
-            E.put(j, edgeSetJ);
         }
 
-        // TODO: Implement!
-        return Triplet.with(g, L, E);
+        if (j == 1) {
+            for (int u : S) {
+                if (Gamma.containsKey(u) && L.get(Gamma.get(u)).getValue0() == 0) {
+                    tags.put(u, Gamma.get(u));
+                    tags.put(matching.get(u), u);
+                    tags.put(Gamma.get(u), Gamma.get(u));
+                } else {
+                    tags.put(u, -1);
+                    tags.put(matching.get(u), -1);
+                }
+            }
+            return;
+        }
+        System.out.println(layerSizes);
+        while (SPrime.size() > delta * layerSizes.get(j-1)) {
+            findLayerPaths(L, SPrime, delta * delta, j - 1, tags, matching, layerSizes);
+            for (int v : SPrime) {
+                if (!tags.containsKey(v) || tags.get(v) != -1) {
+                    tags.put(Gamma.get(matching.get(v)), matching.get(v));
+                }
+            }
+
+            SPrime = new HashSet<>();
+            Gamma = new HashMap<>();
+
+            verticesCoveredByMatching = new HashSet<>();
+            for (DefaultEdge edge : stream) {
+                int s = g.getEdgeSource(edge);
+                int t = g.getEdgeTarget(edge);
+                if ((S.contains(s) && !tags.containsKey(s) && L.get(t).equals(Pair.with(j - 1, "a")) && !tags.containsKey(t)) ||
+                        (S.contains(t) && !tags.containsKey(t) && L.get(s).equals(Pair.with(j - 1, "a")) && !tags.containsKey(s))) {
+                    if (!verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t)) {
+                        Gamma.put(s, t);
+                        Gamma.put(t, s);
+                        verticesCoveredByMatching.add(s);
+                        verticesCoveredByMatching.add(t);
+                    }
+                    if (L.get(s).getValue0() == (j - 1)) {
+                        SPrime.add(matching.get(s));
+                    } else {
+                        assert L.get(t).getValue0() == (j - 1);
+                        SPrime.add(matching.get(t));
+                    }
+                }
+            }
+        }
+
+        for (int v : S) {
+            if (!tags.containsKey(v)) {
+                tags.put(v, -1);
+                tags.put(matching.get(v),-1);
+            }
+        }
     }
 
-    private Set<Integer> getFreeVertices(List<DefaultEdge> stream, Set<DefaultEdge> M) {
-        return new HashSet<>();
-    }
-
-
-
-    private Set<DefaultEdge> findLayerPaths(Graph<Integer, DefaultEdge> GPrime, Set<Integer> S, double delta, int j) {
-        // TODO: Implement!
-        return new HashSet<>();
-    }
-
-    private Set<DefaultEdge> setDifference(Set<DefaultEdge> setA, Set<DefaultEdge> setB) {
+    private Set<DefaultEdge> getSymmetricDifference(Set<DefaultEdge> setA, Set<DefaultEdge> setB) {
         Set<DefaultEdge> symmetricDiff = new HashSet<>();
         for (DefaultEdge edge : setA) {
             if (!setB.contains(edge)) {
