@@ -138,7 +138,6 @@ public class McGregor {
             }
             while (tags.get(v) != v) {
                 int u = tags.get(v);
-                // TODO: implement! Need to find a way to get *the edge object* (u, v) from the stream efficiently
                 Set<Integer> newEdge = new HashSet<>();
                 newEdge.add(v);
                 newEdge.add(u);
@@ -189,9 +188,8 @@ public class McGregor {
                                 double delta, int j, Map<Integer, Integer> tags, Map<Integer, Integer> matching,
                                 Map<Integer, Integer> layerSizes) {
         System.out.println("Calling findLayerPaths");
-        // TODO: Fix being careful with a's and b's in each layer - currently are not using the b's
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
-        Set<Integer> SPrime = new HashSet<>(); // TODO: SPrime should almost certainly be the corresponding b vertices in each layer
+        Set<Integer> SPrime = new HashSet<>();
         Map<Integer, Integer> Gamma = new HashMap<>();
 
         Set<Integer> verticesCoveredByMatching = new HashSet<>();
@@ -202,12 +200,6 @@ public class McGregor {
             Pair<Integer, String> sLayer = L.get(s);
             Pair<Integer, String> tLayer = L.get(t);
 
-            // TODO: be careful with the tagging - paper assumes u take edge-corresponding nodes in the layered graphs,
-            // TODO: but only working with original nodes here, maybe make sure to tag one iff its match is tagged, or
-            // TODO: tag the next one when tagging the "a" one
-
-
-            // TODO: be careful with this "a" stuff - the first and last layers don't have tags (maybe tag the last layer with "a"??)
             if ((S.contains(s) && tLayer.equals(Pair.with(j - 1, "a")) && !tags.containsKey(t)) ||
                     (S.contains(t) && sLayer.equals(Pair.with(j - 1, "a")) && !tags.containsKey(s))) {
                 if (!verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t)) {
