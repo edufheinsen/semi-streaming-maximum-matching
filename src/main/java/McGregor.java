@@ -22,16 +22,21 @@ public class McGregor {
         }
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         Set<DefaultEdge> M = findMaximalMatching(this.stream, g);
+        System.out.println("The size of the greedy matching is " + M.size());
         this.k = (int) Math.ceil(1.0/eps + 1);
         this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) );
+        System.out.println("k is " + this.k);
+        System.out.println("r is " + this.r);
 
         for (int j = 1; j <= r; j++) {
+
             List<Set<DefaultEdge>> matchings = new ArrayList<>(); // TODO: make more efficient! can just keep maximum
             for (int i = 1; i <= k; i++) {
                 Set<DefaultEdge> matching = findAugPaths(M, i);
                 matchings.add(matching);
             }
             M = maxCardinalityMatching(matchings);
+            if (j <= 1000) System.out.println("Now in iteration " + j + " of the outer loop. Size of matching found is " + M.size());
         }
 
         return M;
@@ -67,6 +72,7 @@ public class McGregor {
     }
 
     private Set<DefaultEdge> findAugPaths(Set<DefaultEdge> M, int i) {
+        // System.out.println("In findAugPaths");
         Quartet<Map<Integer, Pair<Integer, String>>, Set<Integer>, Map<Integer, Integer>, Map<Integer, Integer>> quartet
                 = createLayerGraph(M, i);
         Map<Integer, Pair<Integer, String>> L = quartet.getValue0();
@@ -74,12 +80,15 @@ public class McGregor {
         Map<Integer, Integer> matching = quartet.getValue2();
         Map<Integer, Integer> layerSizes = quartet.getValue3();
         Map<Integer, Integer> tags = new HashMap<>();
-        for (int j = 0; j <= i + 1; j++) {
-            if (layerSizes.get(j) == 0) {
-                return M;
-            }
-        }
+//        for (int j = 0; j <= i + 1; j++) {
+//            if (layerSizes.get(j) == 0) {
+//                System.out.println("Returning M quickly in findAugPaths");
+//                return M;
+//            }
+//        }
         findLayerPaths(L, firstLayer, 1.0 / (r * (2*k + 2)), i+1, tags, matching, layerSizes);
+        // System.out.println("Before calling getPathsFromTags firstLayer is " + firstLayer);
+        // System.out.println("Before calling getPathsFromTags L is " + L);
         Set<DefaultEdge> P = getPathsFromTags(tags, firstLayer);
         return getSymmetricDifference(M, P);
     }
@@ -105,7 +114,7 @@ public class McGregor {
         for (int v : freeVertices) {
             int randLayer = ThreadLocalRandom.current().nextBoolean() ? 0 : (i+1);
             vertexL.put(v, Pair.with(randLayer, "a")); // Suspicious - be careful if this nonempty tagging breaks something
-            layerSizes.put(randLayer, layerSizes.getOrDefault(i+1,0) + 1);
+            layerSizes.put(randLayer, layerSizes.getOrDefault(randLayer,0) + 1);
             if (randLayer == (i+1)) {
                 firstLayer.add(v);
             }
@@ -127,7 +136,7 @@ public class McGregor {
 
     private Set<DefaultEdge> getPathsFromTags(Map<Integer, Integer> tags, Set<Integer> firstLayer) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
-        Set<Set<Integer>> edgeSet = new HashSet<>(); // TODO: Does this overuse space?? storing all of P????
+        Set<Set<Integer>> edgeSet = new HashSet<>();
         Set<DefaultEdge> P = new HashSet<>();
         if (tags == null || tags.size() == 0) {
             return P;
@@ -136,13 +145,19 @@ public class McGregor {
             if (tags.get(v) == -1) {
                 continue;
             }
+            // System.out.println("Immediately before for loop tags is " + tags);
+            // System.out.println("And tags.get(v) is " + tags.get(v));
             while (tags.get(v) != v) {
                 int u = tags.get(v);
                 Set<Integer> newEdge = new HashSet<>();
                 newEdge.add(v);
                 newEdge.add(u);
                 edgeSet.add(newEdge);
+//                if (!tags.containsKey(u)) {
+//                    System.out.println(v + " is tagged with " + u + " which is not contained in the map.");
+//                }
                 v = u;
+
             }
         }
         for (DefaultEdge edge : stream) {
@@ -187,7 +202,7 @@ public class McGregor {
     private void findLayerPaths(Map<Integer, Pair<Integer, String>> L, Set<Integer> S,
                                 double delta, int j, Map<Integer, Integer> tags, Map<Integer, Integer> matching,
                                 Map<Integer, Integer> layerSizes) {
-        System.out.println("Calling findLayerPaths");
+        // System.out.println("Calling findLayerPaths");
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         Set<Integer> SPrime = new HashSet<>();
         Map<Integer, Integer> Gamma = new HashMap<>();
@@ -207,13 +222,14 @@ public class McGregor {
                     Gamma.put(t, s);
                     verticesCoveredByMatching.add(s);
                     verticesCoveredByMatching.add(t);
+                    if (L.get(s).getValue0() == (j - 1)) {
+                        SPrime.add(matching.get(s));
+                    } else {
+                        assert L.get(t).getValue0() == (j -1);
+                        SPrime.add(matching.get(t));
+                    }
                 }
-                if (L.get(s).getValue0() == (j - 1)) {
-                    SPrime.add(matching.get(s));
-                } else {
-                    assert L.get(t).getValue0() == (j -1);
-                    SPrime.add(matching.get(t));
-                }
+
             }
         }
 
@@ -221,21 +237,26 @@ public class McGregor {
             for (int u : S) {
                 if (Gamma.containsKey(u) && L.get(Gamma.get(u)).getValue0() == 0) {
                     tags.put(u, Gamma.get(u));
+                    assert matching.get(u) != null;
                     tags.put(matching.get(u), u);
+                    assert Gamma.get(u) != null;
                     tags.put(Gamma.get(u), Gamma.get(u));
                 } else {
                     tags.put(u, -1);
+                    assert matching.get(u) != null;
                     tags.put(matching.get(u), -1);
                 }
             }
             return;
         }
-        System.out.println(layerSizes);
+        // System.out.println(layerSizes);
         while (SPrime.size() > delta * layerSizes.get(j-1)) {
             findLayerPaths(L, SPrime, delta * delta, j - 1, tags, matching, layerSizes);
             for (int v : SPrime) {
                 if (!tags.containsKey(v) || tags.get(v) != -1) {
+                    assert Gamma.get(matching.get(v)) != null; // This is sometimes failing
                     tags.put(Gamma.get(matching.get(v)), matching.get(v));
+                    tags.put(matching.get(v), v);
                 }
             }
 
@@ -253,13 +274,14 @@ public class McGregor {
                         Gamma.put(t, s);
                         verticesCoveredByMatching.add(s);
                         verticesCoveredByMatching.add(t);
+                        if (L.get(s).getValue0() == (j - 1)) {
+                            SPrime.add(matching.get(s));
+                        } else {
+                            assert L.get(t).getValue0() == (j - 1);
+                            SPrime.add(matching.get(t));
+                        }
                     }
-                    if (L.get(s).getValue0() == (j - 1)) {
-                        SPrime.add(matching.get(s));
-                    } else {
-                        assert L.get(t).getValue0() == (j - 1);
-                        SPrime.add(matching.get(t));
-                    }
+
                 }
             }
         }
@@ -267,7 +289,9 @@ public class McGregor {
         for (int v : S) {
             if (!tags.containsKey(v)) {
                 tags.put(v, -1);
-                tags.put(matching.get(v),-1);
+                if (matching.containsKey(v)) {
+                    tags.put(matching.get(v), -1);
+                }
             }
         }
     }
