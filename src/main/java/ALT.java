@@ -58,7 +58,6 @@ public class ALT {
         Set<Integer> bidders = biddersItemsList.get(0);
         Set<Integer> items = biddersItemsList.get(1);
 
-
         Map<Integer, Double> prices = new HashMap<>();
         Map<Integer, Integer> bidderAllocations = new HashMap<>();
         Map<Integer, Integer> itemOwners = new HashMap<>();
@@ -155,17 +154,30 @@ public class ALT {
         }
 
         Set<DefaultEdge> approxMatching = new HashSet<>();
+        Set<Set<Integer>> edgeSet = new HashSet<>();
 
         for (int bidder : bidderAllocations.keySet()) {
             int item = bidderAllocations.get(bidder);
             if (item == -1) {
                 continue;
             }
-            g.addVertex(bidder);
-            g.addVertex(item);
-            DefaultEdge edge = g.addEdge(bidder, item);
-            approxMatching.add(edge);
+            Set<Integer> newEdge = new HashSet<>();
+            newEdge.add(bidder);
+            newEdge.add(item);
+            edgeSet.add(newEdge);
         }
+
+        for (DefaultEdge edge : stream) {
+            int v = g.getEdgeSource(edge);
+            int u = g.getEdgeTarget(edge);
+            Set<Integer> newEdge = new HashSet<>();
+            newEdge.add(v);
+            newEdge.add(u);
+            if (edgeSet.contains(newEdge)) {
+                approxMatching.add(edge);
+            }
+        }
+
 
         return approxMatching;
     }
