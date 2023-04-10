@@ -1,9 +1,12 @@
+import org.javatuples.Pair;
 import org.jgrapht.Graph;
 import org.jgrapht.alg.matching.HopcroftKarpMaximumCardinalityBipartiteMatching;
 import org.jgrapht.generate.CompleteBipartiteGraphGenerator;
 import org.jgrapht.generate.CompleteGraphGenerator;
 import org.jgrapht.generate.GnmRandomBipartiteGraphGenerator;
+import org.jgrapht.generate.GnpRandomBipartiteGraphGenerator;
 import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultUndirectedGraph;
 import org.jgrapht.graph.SimpleGraph;
 import org.jgrapht.util.SupplierUtil;
 import org.junit.jupiter.api.Test;
@@ -70,8 +73,7 @@ class ALTTest {
         ALT alt = new ALT(stream);
     }
 
-    @Test
-    void testFindApproximateMaxMatchingReturnsMatching() {
+    private Pair<Graph<Integer, DefaultEdge>, GnpRandomBipartiteGraphGenerator<Integer, DefaultEdge>>  generateRandomBipartiteGraph(int partitionSize, double p) {
         Supplier<Integer> vSupplier = new Supplier<>() {
             private int id = 0;
 
@@ -81,30 +83,22 @@ class ALTTest {
             }
         };
 
-        int partitionSize = 100;
-        int numEdges = 70;
-
-        Graph<Integer, DefaultEdge> gnmBipartiteGraph =
+        Graph<Integer, DefaultEdge> gnpBipartiteGraph =
                 new SimpleGraph<>(vSupplier, SupplierUtil.createDefaultEdgeSupplier(), false);
 
-        GnmRandomBipartiteGraphGenerator<Integer, DefaultEdge> gnmRandomBipartiteGraphGenerator =
-                new GnmRandomBipartiteGraphGenerator<>(partitionSize, partitionSize, numEdges);
+        GnpRandomBipartiteGraphGenerator<Integer, DefaultEdge> gnpRandomBipartiteGraphGenerator =
+                new GnpRandomBipartiteGraphGenerator<>(partitionSize, partitionSize, p);
+        gnpRandomBipartiteGraphGenerator.generateGraph(gnpBipartiteGraph);
+        return Pair.with(gnpBipartiteGraph,gnpRandomBipartiteGraphGenerator);
+    }
 
-        gnmRandomBipartiteGraphGenerator.generateGraph(gnmBipartiteGraph);
-
-        Set<DefaultEdge> edgeSet = gnmBipartiteGraph.edgeSet();
-        List<DefaultEdge> stream = new ArrayList<>(edgeSet);
-        ALT alt = new ALT(stream);
-        double eps = 0.25;
-        Set<DefaultEdge> matching = alt.findApproximateMaxMatching(eps);
+    private void isMatching(Set<DefaultEdge> matching, Set<DefaultEdge> edgeSet) {
         Set<Integer> verticesCoveredByReturnedMatching = new HashSet<>();
-        Set<Integer> originalVertexSet = gnmBipartiteGraph.vertexSet();
+        Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         for (DefaultEdge edge : matching) {
-            int s = gnmBipartiteGraph.getEdgeSource(edge);
-            int t = gnmBipartiteGraph.getEdgeTarget(edge);
-            assertAll(() -> assertTrue(originalVertexSet.contains(s)),
-                    () -> assertTrue(originalVertexSet.contains(t)),
-                    () -> assertTrue(gnmBipartiteGraph.containsEdge(s, t)),
+            int s = g.getEdgeSource(edge);
+            int t = g.getEdgeTarget(edge);
+            assertAll(() -> assertTrue(edgeSet.contains(edge)),
                     () -> assertFalse(verticesCoveredByReturnedMatching.contains(s)),
                     () -> assertFalse(verticesCoveredByReturnedMatching.contains(t)));
             verticesCoveredByReturnedMatching.add(s);
@@ -113,38 +107,32 @@ class ALTTest {
     }
 
     @Test
-    void testFindApproximateMaxMatchingReturnsGoodApproximationOfMaxMatching() {
-        Supplier<Integer> vSupplier = new Supplier<>() {
-            private int id = 0;
-
-            @Override
-            public Integer get() {
-                return id++;
-            }
-        };
-
-        int partitionSize = 100;
-        int numEdges = 70;
-
-        Graph<Integer, DefaultEdge> gnmBipartiteGraph =
-                new SimpleGraph<>(vSupplier, SupplierUtil.createDefaultEdgeSupplier(), false);
-
-        GnmRandomBipartiteGraphGenerator<Integer, DefaultEdge> gnmRandomBipartiteGraphGenerator =
-                new GnmRandomBipartiteGraphGenerator<>(partitionSize, partitionSize, numEdges);
-
-        gnmRandomBipartiteGraphGenerator.generateGraph(gnmBipartiteGraph);
-
-        Set<DefaultEdge> edgeSet = gnmBipartiteGraph.edgeSet();
-        List<DefaultEdge> stream = new ArrayList<>(edgeSet);
+    void testFindApproximateMaxMatching() {
+        int partitionSize = 1000;
+        double p = 0.001;
+        Pair<Graph<Integer, DefaultEdge>,GnpRandomBipartiteGraphGenerator<Integer, DefaultEdge>> pair = generateRandomBipartiteGraph(partitionSize, p);
+        Graph<Integer, DefaultEdge> g = pair.getValue0();
+        GnpRandomBipartiteGraphGenerator<Integer, DefaultEdge> generator = pair.getValue1();
+        Set<DefaultEdge> originalEdgeSet = g.edgeSet();
+        List<DefaultEdge> stream = new ArrayList<>(originalEdgeSet);
         ALT alt = new ALT(stream);
-        double eps = 0.25;
-        Set<DefaultEdge> matching = alt.findApproximateMaxMatching(eps);
+        HopcroftKarpMaximumCardinalityBipartiteMatching<Integer, DefaultEdge> actualMaxMatching
+                = new HopcroftKarpMaximumCardinalityBipartiteMatching<>(g, generator.getFirstPartition(), generator.getSecondPartition());
 
-       int returnedMatchingSize = matching.size();
-       HopcroftKarpMaximumCardinalityBipartiteMatching<Integer, DefaultEdge> actualMaxMatching
-                = new HopcroftKarpMaximumCardinalityBipartiteMatching<>(gnmBipartiteGraph, gnmRandomBipartiteGraphGenerator.getFirstPartition(), gnmRandomBipartiteGraphGenerator.getSecondPartition());
-       int actualMaxMatchingSize = actualMaxMatching.getMatching().getEdges().size();
-       double correctedEps = eps + Math.pow(10, -10);
-       assertTrue(returnedMatchingSize >= (1 - correctedEps) * actualMaxMatchingSize);
+        int actualMaxMatchingSize = actualMaxMatching.getMatching().getEdges().size();
+        // System.out.println("The actual max matching has size " + actualMaxMatchingSize);
+        // System.out.println("The original edge set is " + originalEdgeSet);
+
+        List<Double> epsValues = Arrays.asList(1.0/2, 1.0/3, 1.0/5); // values of eps to test
+        // TODO - test on multiple deterministically constructed graphs
+        for (double eps : epsValues) {
+            // System.out.println("Now testing eps value " + eps);
+            Set<DefaultEdge> ALTMatching = alt.findApproximateMaxMatching(eps);
+            // System.out.println("The ALT matching has size " + ALTMatching.size());
+            // System.out.println("The ALT matching is " + ALTMatching);
+            isMatching(ALTMatching, originalEdgeSet);
+
+            assertTrue(ALTMatching.size() >= (1 - eps) * actualMaxMatchingSize);
+        }
     }
 }
