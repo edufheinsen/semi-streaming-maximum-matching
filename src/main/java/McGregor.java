@@ -16,63 +16,29 @@ public class McGregor {
         this.stream = stream;
     }
 
+    /* Implementation of the Find-Matching algorithm in Andrew McGregor's "Finding Graph Matchings in Data Streams"
+    *  paper (2005). Paper available at https://people.cs.umass.edu/~mcgregor/papers/05-approx1.pdf */
     public Set<DefaultEdge> findApproximateMaxMatching(double eps) {
         if (eps <= 0 || eps >= 1) {
             throw new IllegalArgumentException("Argument to findApproximateMatching must be a real number strictly between 0 and 1");
         }
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
-        Set<DefaultEdge> M = findMaximalMatching(this.stream, g);
-        System.out.println("The size of the greedy matching is " + M.size());
+        Set<DefaultEdge> M = GraphUtils.findMaximalMatching(this.stream, g);
         this.k = (int) Math.ceil(1.0/eps + 1);
-        this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) );
-        System.out.println("k is " + this.k);
-        System.out.println("r is " + this.r);
-
+        this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) ); // Overflows when k >= 6 - could use BigInteger if added complexity and slight performance issues are not a problem
         for (int j = 1; j <= r; j++) {
-
-            List<Set<DefaultEdge>> matchings = new ArrayList<>(); // TODO: make more efficient! can just keep maximum
             for (int i = 1; i <= k; i++) {
                 Set<DefaultEdge> matching = findAugPaths(M, i);
-                matchings.add(matching);
+                if (matching.size() > M.size()) {
+                    M = matching;
+                }
             }
-            M = maxCardinalityMatching(matchings);
-            if (j <= 1000) System.out.println("Now in iteration " + j + " of the outer loop. Size of matching found is " + M.size());
         }
-
         return M;
     }
 
-    private Set<DefaultEdge> maxCardinalityMatching(List<Set<DefaultEdge>> matchings) {
-        int maxCard = -1;
-        Set<DefaultEdge> largestMatching = new HashSet<>();
-        for (Set<DefaultEdge> matching : matchings) {
-            int cardinality = matching.size();
-            if (cardinality > maxCard) {
-                maxCard = cardinality;
-                largestMatching = matching;
-            }
-        }
-        return largestMatching;
-    }
-
-    private Set<DefaultEdge> findMaximalMatching(List<DefaultEdge> stream, Graph<Integer, DefaultEdge> g) {
-        Set<DefaultEdge> matching = new HashSet<>();
-        Set<Integer> verticesCoveredByMatching = new HashSet<>();
-
-        for (DefaultEdge edge : stream) {
-            int s = g.getEdgeSource(edge);
-            int t = g.getEdgeTarget(edge);
-            if (!verticesCoveredByMatching.contains(s) && !verticesCoveredByMatching.contains(t)) {
-                matching.add(edge);
-                verticesCoveredByMatching.add(s);
-                verticesCoveredByMatching.add(t);
-            }
-        }
-        return matching;
-    }
-
+    // Implementation of the Find-Aug-Paths subroutine in the paper
     private Set<DefaultEdge> findAugPaths(Set<DefaultEdge> M, int i) {
-        // System.out.println("In findAugPaths");
         Quartet<Map<Integer, Pair<Integer, String>>, Set<Integer>, Map<Integer, Integer>, Map<Integer, Integer>> quartet
                 = createLayerGraph(M, i);
         Map<Integer, Pair<Integer, String>> L = quartet.getValue0();
@@ -80,46 +46,31 @@ public class McGregor {
         Map<Integer, Integer> matching = quartet.getValue2();
         Map<Integer, Integer> layerSizes = quartet.getValue3();
         Map<Integer, Integer> tags = new HashMap<>();
-//        for (int j = 0; j <= i + 1; j++) {
-//            if (layerSizes.get(j) == 0) {
-//                System.out.println("Returning M quickly in findAugPaths");
-//                return M;
-//            }
-//        }
         findLayerPaths(L, firstLayer, 1.0 / (r * (2*k + 2)), i+1, tags, matching, layerSizes);
-        // System.out.println("Before calling getPathsFromTags firstLayer is " + firstLayer);
-        // System.out.println("Before calling getPathsFromTags L is " + L);
         Set<DefaultEdge> P = getPathsFromTags(tags, firstLayer);
         return getSymmetricDifference(M, P);
     }
 
-    // just returns map from vertices to their layer (each layer is a Pair<Integer, String>)
+    // Implementation of the Create-Layer-Graph subroutine in the paper
     private Quartet<Map<Integer, Pair<Integer, String>>, Set<Integer>, Map<Integer, Integer>,
             Map<Integer, Integer>> createLayerGraph(Set<DefaultEdge> M, int i) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
-
         Set<Integer> freeVertices = getFreeVertices(M);
-
         Map<Integer, Pair<Integer, String>> vertexL = new HashMap<>();
-
         Map<Integer, Integer> matching = new HashMap<>();
-
         Map<Integer, Integer> layerSizes = new HashMap<>();
-
         for (int j = 0; j <= i + 1; j++) {
             layerSizes.put(j, 0);
         }
-
         Set<Integer> firstLayer = new HashSet<>();
         for (int v : freeVertices) {
             int randLayer = ThreadLocalRandom.current().nextBoolean() ? 0 : (i+1);
-            vertexL.put(v, Pair.with(randLayer, "a")); // Suspicious - be careful if this nonempty tagging breaks something
+            vertexL.put(v, Pair.with(randLayer, "a"));
             layerSizes.put(randLayer, layerSizes.getOrDefault(randLayer,0) + 1);
             if (randLayer == (i+1)) {
                 firstLayer.add(v);
             }
         }
-
         for (DefaultEdge edge : M) {
             int u = g.getEdgeSource(edge);
             int v = g.getEdgeTarget(edge);
@@ -130,10 +81,10 @@ public class McGregor {
             matching.put(u, v);
             matching.put(v, u);
         }
-
         return Quartet.with(vertexL, firstLayer, matching, layerSizes);
     }
 
+    // Recover augmenting paths from the tags placed on vertices in findLayerPaths
     private Set<DefaultEdge> getPathsFromTags(Map<Integer, Integer> tags, Set<Integer> firstLayer) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         Set<Set<Integer>> edgeSet = new HashSet<>();
@@ -145,17 +96,12 @@ public class McGregor {
             if (tags.get(v) == -1) {
                 continue;
             }
-            // System.out.println("Immediately before for loop tags is " + tags);
-            // System.out.println("And tags.get(v) is " + tags.get(v));
             while (tags.get(v) != v) {
                 int u = tags.get(v);
                 Set<Integer> newEdge = new HashSet<>();
                 newEdge.add(v);
                 newEdge.add(u);
                 edgeSet.add(newEdge);
-//                if (!tags.containsKey(u)) {
-//                    System.out.println(v + " is tagged with " + u + " which is not contained in the map.");
-//                }
                 v = u;
 
             }
@@ -173,6 +119,7 @@ public class McGregor {
         return P;
     }
 
+    // Get all free vertices with respect to the matching M in the graph
     private Set<Integer> getFreeVertices(Set<DefaultEdge> M) {
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         Set<Integer> verticesCoveredByMatching = new HashSet<>();
@@ -197,18 +144,14 @@ public class McGregor {
         return freeVertices;
     }
 
-
-
+    // Implementation of the Find-Layer-Paths subroutine in the paper
     private void findLayerPaths(Map<Integer, Pair<Integer, String>> L, Set<Integer> S,
                                 double delta, int j, Map<Integer, Integer> tags, Map<Integer, Integer> matching,
                                 Map<Integer, Integer> layerSizes) {
-        // System.out.println("Calling findLayerPaths");
         Graph<Integer, DefaultEdge> g = new DefaultUndirectedGraph<>(DefaultEdge.class);
         Set<Integer> SPrime = new HashSet<>();
         Map<Integer, Integer> Gamma = new HashMap<>();
-
         Set<Integer> verticesCoveredByMatching = new HashSet<>();
-
         for (DefaultEdge edge : stream) {
             int s = g.getEdgeSource(edge);
             int t = g.getEdgeTarget(edge);
@@ -232,7 +175,6 @@ public class McGregor {
 
             }
         }
-
         if (j == 1) {
             for (int u : S) {
                 if (Gamma.containsKey(u) && L.get(Gamma.get(u)).getValue0() == 0) {
@@ -249,20 +191,17 @@ public class McGregor {
             }
             return;
         }
-        // System.out.println(layerSizes);
         while (SPrime.size() > delta * layerSizes.get(j-1)) {
             findLayerPaths(L, SPrime, delta * delta, j - 1, tags, matching, layerSizes);
             for (int v : SPrime) {
                 if (!tags.containsKey(v) || tags.get(v) != -1) {
-                    assert Gamma.get(matching.get(v)) != null; // This is sometimes failing
+                    assert Gamma.get(matching.get(v)) != null;
                     tags.put(Gamma.get(matching.get(v)), matching.get(v));
                     tags.put(matching.get(v), v);
                 }
             }
-
             SPrime = new HashSet<>();
             Gamma = new HashMap<>();
-
             verticesCoveredByMatching = new HashSet<>();
             for (DefaultEdge edge : stream) {
                 int s = g.getEdgeSource(edge);
@@ -285,7 +224,6 @@ public class McGregor {
                 }
             }
         }
-
         for (int v : S) {
             if (!tags.containsKey(v)) {
                 tags.put(v, -1);
@@ -296,6 +234,7 @@ public class McGregor {
         }
     }
 
+    // Get the symmetric difference between two edge sets
     private Set<DefaultEdge> getSymmetricDifference(Set<DefaultEdge> setA, Set<DefaultEdge> setB) {
         Set<DefaultEdge> symmetricDiff = new HashSet<>();
         for (DefaultEdge edge : setA) {
