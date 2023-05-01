@@ -27,12 +27,14 @@ public class McGregor {
         this.k = (int) Math.ceil(1.0/eps + 1);
         this.r = 4 * (k * k) * (8*k + 10) * (k-1) * ((int) Math.pow(2*k, k) ); // Overflows when k >= 6 - could use BigInteger if added complexity and slight performance issues are not a problem
         for (int j = 1; j <= r; j++) {
+            Set<DefaultEdge> maxCandidateMatching = new HashSet<>();
             for (int i = 1; i <= k; i++) {
                 Set<DefaultEdge> matching = findAugPaths(M, i);
-                if (matching.size() > M.size()) {
-                    M = matching;
+                if (matching.size() > maxCandidateMatching.size()) {
+                    maxCandidateMatching = matching;
                 }
             }
+            M = maxCandidateMatching;
         }
         return M;
     }
