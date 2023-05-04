@@ -35,6 +35,11 @@ public class McGregor {
                 }
             }
             M = maxCandidateMatching;
+            // Uncomment the following if statement to stop at th 100th iteration
+//            if (j == 100) {
+//                System.out.println("The size of the best matching found after iteration " + j + " is " + M.size());
+//                return M;
+//            }
         }
         return M;
     }
@@ -64,9 +69,10 @@ public class McGregor {
         for (int j = 0; j <= i + 1; j++) {
             layerSizes.put(j, 0);
         }
+        Random rand = new Random(42);
         Set<Integer> firstLayer = new HashSet<>();
         for (int v : freeVertices) {
-            int randLayer = ThreadLocalRandom.current().nextBoolean() ? 0 : (i+1);
+            int randLayer = rand.nextBoolean() ? 0 : (i+1);
             vertexL.put(v, Pair.with(randLayer, "a"));
             layerSizes.put(randLayer, layerSizes.getOrDefault(randLayer,0) + 1);
             if (randLayer == (i+1)) {
@@ -76,7 +82,7 @@ public class McGregor {
         for (DefaultEdge edge : M) {
             int u = g.getEdgeSource(edge);
             int v = g.getEdgeTarget(edge);
-            int j = ThreadLocalRandom.current().nextInt(1, i + 1);
+            int j = rand.nextInt(i) + 1;
             layerSizes.put(j, layerSizes.getOrDefault(j, 0) + 1);
             vertexL.put(u, Pair.with(j, "a"));
             vertexL.put(v, Pair.with(j, "b"));

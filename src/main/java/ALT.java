@@ -119,6 +119,10 @@ public class ALT {
                 prices.put(item, Math.min(price + eps, 1.0));
             }
         }
+        return getApproxMatching(bidderAllocations, g);
+    }
+
+    private Set<DefaultEdge> getApproxMatching(Map<Integer, Integer> bidderAllocations, Graph<Integer, DefaultEdge> g) {
         Set<DefaultEdge> approxMatching = new HashSet<>();
         Set<Set<Integer>> edgeSet = new HashSet<>();
         for (int bidder : bidderAllocations.keySet()) {
